@@ -1,0 +1,25 @@
+name: terraform-test
+
+on:
+    workflow_dispatch:
+    pull_request:
+        branches:
+            - main
+
+jobs:
+    terraform-test:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v1
+              with:
+                  terraform_version: 1.0.0
+
+            - name: Terraform init
+              run: terraform init
+
+            - name: Terraform validate
+              run: terraform validate
