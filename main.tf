@@ -1,7 +1,7 @@
 provider "google" {
   #   credentials = file(var.credentials)    
   project = var.project_id
-  region  = var.region
+  region  = var.reg
 }
 
 resource "google_compute_network" "vpc_name" {
