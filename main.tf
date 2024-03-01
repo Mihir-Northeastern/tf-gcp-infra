@@ -38,14 +38,11 @@ resource "google_compute_firewall" "firewall-sub" {
 
   allow {
     protocol = "tcp"
-    ports    = ["22", "3000"]
+    ports    = ["3000"]
   }
+  
   source_tags = ["webapp"]
   source_ranges = ["0.0.0.0/0"]
-}
-
-resource "google_compute_address" "webapp_address" {
-  name = var.address
 }
 
 resource "google_service_account" "default" {
@@ -56,13 +53,13 @@ resource "google_service_account" "default" {
 resource "google_compute_instance" "default" {
   name         = "gcp-vm-instance-centos-new"
   machine_type = "n2-standard-2"
-  zone         = "us-east1-b"
+  zone         = "us-east4-a"
 
-  tags = ["foo", "bar", "http-server", "https-server", "webapp"]
+  tags = ["http-server", "https-server", "webapp"]
 
   boot_disk {
     initialize_params {
-      image = "packer-1708651751"
+      image = "packer-1709315722"
       size  = 100                     
       type  = "pd-balanced"           
     }

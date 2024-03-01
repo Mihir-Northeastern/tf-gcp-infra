@@ -60,9 +60,3 @@ variable "next_hop_gateway" {
   description = "Next Hop Gateway - GCP"
   type        = string
 }
-
-variable "address" {
-  description = "Address - GCP"
-  type        = string
-  
-}
