@@ -60,3 +60,39 @@ variable "next_hop_gateway" {
   description = "Next Hop Gateway - GCP"
   type        = string
 }
+
+variable "private_ip_google_access" {
+  description = "Private IP Google Access - GCP"
+  type        = bool
+}
+
+variable "firewall_name" {
+  description = "Firewall Name - GCP"
+  type        = string
+}
+
+variable "firewall_sql_name" {
+  description = "Firewall SQL Name - GCP"
+  type        = string
+}
+
+variable "deny-ssh-to-connect" {
+  description = "Deny SSH To Connect - GCP"
+  type        = string
+}
+
+variable "deny-internet-connection-sql-db-instance" {
+  description = "Deny Internet Connection SQL DB Instance - GCP"
+  type        = string
+}
+
+variable "db-name" {
+  description = "DB Name - GCP"
+  type        = string
+}
+
+variable "db-user" {
+  description = "DB User - GCP"
+  type        = string
+
+}
