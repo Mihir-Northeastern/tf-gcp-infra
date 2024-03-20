@@ -153,16 +153,45 @@ resource "google_service_account" "default" {
   display_name = "VM Instance"
 }
 
+resource "google_dns_record_set" "a" {
+  name         = var.dns_name
+  managed_zone = var.dns_zone
+  type         = "A"
+  ttl          = 60
+
+  rrdatas = [google_compute_instance.default.network_interface[0].access_config[0].nat_ip]
+  depends_on = [google_compute_instance.default]
+}
+
+resource "google_project_iam_binding" "logging_admin_binding" {
+  project = var.project_id
+  role    = "roles/logging.admin"
+
+  members = [
+    var.service_account_log_metric,
+  ]
+}
+
+resource "google_project_iam_binding" "monitoring_metric_writer_binding" {
+  project = var.project_id
+  role    = "roles/monitoring.metricWriter"
+
+  members = [
+    var.service_account_log_metric,
+  ]
+}
+
+
 resource "google_compute_instance" "default" {
   name         = "gcp-vm-instance-centos-new"
-  machine_type = "n2-standard-2"
-  zone         = "us-east4-a"
+  machine_type = "n2-standard-4"
+  zone         = "us-east4-b"
 
   tags = ["http-server", "https-server", "webapp"]
 
   boot_disk {
     initialize_params {
-      image = "packer-1709368047"
+      image = var.packer_image_name
       size  = 100
       type  = "pd-balanced"
     }
@@ -194,5 +223,7 @@ resource "google_compute_instance" "default" {
     email  = google_service_account.default.email
     scopes = ["cloud-platform"]
   }
+
+  
 
 }

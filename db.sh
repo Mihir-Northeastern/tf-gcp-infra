@@ -19,6 +19,7 @@ sudo cp /tmp/.env /opt/csye6225/webapp/
 
 
 sudo systemctl daemon-reload
+sudo systemctl restart google-cloud-ops-agent
 sudo systemctl enable csye
 sudo systemctl start csye
 sudo systemctl status csye

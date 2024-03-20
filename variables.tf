@@ -96,3 +96,23 @@ variable "db-user" {
   type        = string
 
 }
+
+variable "packer_image_name"{
+  description = "value of packer image name"
+  type        = string
+}
+
+variable "dns_name" {
+  description = "DNS Name - GCP"
+  type        = string
+}
+
+variable "dns_zone" {
+  description = "DNS Zone - GCP"
+  type        = string
+}
+
+variable "service_account_log_metric" {
+  description = "Service Account Log Metric - GCP"
+  type        = string
+}
