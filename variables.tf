@@ -97,7 +97,7 @@ variable "db-user" {
 
 }
 
-variable "packer_image_name"{
+variable "packer_image_name" {
   description = "value of packer image name"
   type        = string
 }
@@ -115,4 +115,19 @@ variable "dns_zone" {
 variable "service_account_log_metric" {
   description = "Service Account Log Metric - GCP"
   type        = string
+}
+
+variable "mailgun_api_key" {
+  description = "Mailgun API Key - GCP"
+  type        = string
+}
+
+variable "mailgun_domain" {
+  description = "Mailgun Domain - GCP"
+  type        = string
+} 
+
+variable service_account_function{
+  description = "Service Account Function - GCP"
+  type        = string  
 }

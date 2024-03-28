@@ -41,27 +41,27 @@ resource "google_compute_firewall" "firewall-sub" {
 
   allow {
     protocol = "tcp"
-    ports    = ["3000"]
+    ports    = ["3000", "22", "5432"]
   }
 
   target_tags   = ["gcp-vm-instance-centos-new", "http-server", "https-server"]
   source_ranges = ["0.0.0.0/0"]
 }
 
-resource "google_compute_firewall" "deny-ssh-to-connect" {
-  name    = var.deny-ssh-to-connect
-  project = var.project_id
-  network = google_compute_network.vpc_name.self_link
+# resource "google_compute_firewall" "deny-ssh-to-connect" {
+#   name    = var.deny-ssh-to-connect
+#   project = var.project_id
+#   network = google_compute_network.vpc_name.self_link
 
-  deny {
-    protocol = "tcp"
-    ports    = ["22"]
-  }
+#   deny {
+#     protocol = "tcp"
+#     ports    = ["22"]
+#   }
 
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["gcp-vm-instance-centos-new"]
-  priority      = 1000
-}
+#   source_ranges = ["0.0.0.0/0"]
+#   target_tags   = ["gcp-vm-instance-centos-new"]
+#   priority      = 1000
+# }
 
 resource "google_compute_firewall" "allow-sql" {
   name    = var.firewall_sql_name
@@ -78,19 +78,21 @@ resource "google_compute_firewall" "allow-sql" {
   direction     = "INGRESS"
 }
 
-resource "google_compute_firewall" "deny-internet-connection-sql-db-instance" {
-  name    = var.deny-internet-connection-sql-db-instance
-  project = var.project_id
-  network = google_compute_network.vpc_name.self_link
 
-  deny {
-    protocol = "tcp"
-    ports    = ["3306"]
-  }
 
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["db-instance"]
-}
+# resource "google_compute_firewall" "deny-internet-connection-sql-db-instance" {
+#   name    = var.deny-internet-connection-sql-db-instance
+#   project = var.project_id
+#   network = google_compute_network.vpc_name.self_link
+
+#   deny {
+#     protocol = "tcp"
+#     ports    = ["3306"]
+#   }
+
+#   source_ranges = ["0.0.0.0/0"]
+#   target_tags   = ["db-instance"]
+# }
 
 
 # Create a private IP
@@ -109,6 +111,30 @@ resource "google_service_networking_connection" "private_connection" {
   reserved_peering_ranges = [google_compute_global_address.private_ip_alloc.name]
 }
 
+resource "google_compute_firewall" "allow-port-3000" {
+  name    = "allow-port-3000"
+  network = google_compute_network.vpc_name.self_link
+
+  allow {
+    protocol = "tcp"
+    ports    = ["3000"]
+  }
+
+  source_ranges = ["0.0.0.0/0"] # Adjust as needed to limit traffic source
+}
+
+# Creates a VPC Access Connector
+resource "google_vpc_access_connector" "connector" {
+  name          = "vpc-con"
+  machine_type  = "e2-micro"
+  region        = "us-east4"
+  ip_cidr_range = "10.8.0.0/28"
+  network       = google_compute_network.vpc_name.self_link
+}
+
+
+
+
 resource "google_sql_database_instance" "webapp-sql-instance" {
   provider            = google-beta
   project             = var.project_id
@@ -119,7 +145,7 @@ resource "google_sql_database_instance" "webapp-sql-instance" {
   depends_on          = [google_service_networking_connection.private_connection]
 
   settings {
-    tier = "db-f1-micro"
+    tier = "db-custom-1-3840"
     ip_configuration {
       ipv4_enabled                                  = false
       private_network                               = google_compute_network.vpc_name.self_link
@@ -130,6 +156,15 @@ resource "google_sql_database_instance" "webapp-sql-instance" {
     disk_size         = 100
     availability_type = "REGIONAL"
   }
+}
+
+resource "google_project_iam_binding" "cloudsql_admin_role" {
+  project = var.project_id
+  role    = "roles/cloudsql.admin"
+
+  members = [
+    "serviceAccount:${google_sql_database_instance.webapp-sql-instance.service_account_email_address}",
+  ]
 }
 
 resource "google_sql_database" "cloud-db" {
@@ -145,7 +180,7 @@ resource "google_sql_user" "db-user" {
 }
 resource "random_password" "db-password" {
   length           = 16
-  special          = true
+  special          = false
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 resource "google_service_account" "default" {
@@ -159,7 +194,7 @@ resource "google_dns_record_set" "a" {
   type         = "A"
   ttl          = 60
 
-  rrdatas = [google_compute_instance.default.network_interface[0].access_config[0].nat_ip]
+  rrdatas    = [google_compute_instance.default.network_interface[0].access_config[0].nat_ip]
   depends_on = [google_compute_instance.default]
 }
 
@@ -223,7 +258,77 @@ resource "google_compute_instance" "default" {
     email  = google_service_account.default.email
     scopes = ["cloud-platform"]
   }
+}
 
-  
+# Create a Pub/Sub topic
+resource "google_pubsub_topic" "verify_email" {
+  name                       = "verify_email"
+  message_retention_duration = "604800s"
+}
 
+# Create a Pub/Sub subscription
+resource "google_pubsub_subscription" "verify_email_subscription" {
+  name  = "verify_email_subscription"
+  topic = google_pubsub_topic.verify_email.name
+}
+
+# Grant the Cloud Function service account access to the Pub/Sub topic
+resource "google_pubsub_topic_iam_binding" "publisher_access" {
+  topic = google_pubsub_topic.verify_email.name
+  role  = "roles/pubsub.publisher"
+
+  members = [
+    var.service_account_log_metric
+  ]
+}
+
+# Create a Bucket to store the Cloud Function
+resource "google_storage_bucket" "bucket" {
+  name     = "bucket-for-cloud-function-0022"
+  location = var.region
+}
+
+# Upload the Cloud Function to the Bucket
+resource "google_storage_bucket_object" "archive" {
+  name   = "function-source.zip"
+  bucket = google_storage_bucket.bucket.name
+  source = "./function-source.zip"
+}
+
+# Create a Cloud Function
+resource "google_cloudfunctions_function" "lambda" {
+  name    = "lambda"
+  region  = var.region
+  runtime = "nodejs20"
+
+  available_memory_mb   = 256
+  source_archive_bucket = google_storage_bucket.bucket.name
+  source_archive_object = google_storage_bucket_object.archive.name
+  entry_point           = "verifyEmail"
+  event_trigger {
+    event_type = "google.pubsub.topic.publish"
+    resource   = google_pubsub_topic.verify_email.name
+  }
+
+  environment_variables = {
+    CLOUDSQL_INSTANCE_CONNECTION_NAME = google_sql_database_instance.webapp-sql-instance.connection_name
+    DB_NAME                           = google_sql_database.cloud-db.name
+    DB_USER                           = google_sql_user.db-user.name
+    DB_PASSWORD                       = google_sql_user.db-user.password
+    DB_HOST                           = google_sql_database_instance.webapp-sql-instance.private_ip_address
+    MAILGUN_API_KEY                   = var.mailgun_api_key
+    MAILGUN_DOMAIN                    = var.mailgun_domain
+  }
+
+  vpc_connector         = google_vpc_access_connector.connector.name
+  service_account_email = google_service_account.default.email
+}
+
+resource "google_cloudfunctions_function_iam_member" "invoker" {
+  project        = var.project_id
+  region         = var.region
+  cloud_function = google_cloudfunctions_function.lambda.name
+
+  role   = "roles/cloudfunctions.invoker"
+  member = "allUsers"
 }
