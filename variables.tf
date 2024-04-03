@@ -125,9 +125,9 @@ variable "mailgun_api_key" {
 variable "mailgun_domain" {
   description = "Mailgun Domain - GCP"
   type        = string
-} 
+}
 
-variable service_account_function{
+variable "service_account_function" {
   description = "Service Account Function - GCP"
-  type        = string  
+  type        = string
 }
