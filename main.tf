@@ -4,6 +4,11 @@ provider "google" {
 
 }
 
+provider "google-beta" {
+    project = var.project_id
+    region  = var.region
+}
+
 resource "google_compute_network" "vpc_name" {
   name                            = var.vpc_name
   provider                        = google-beta
@@ -143,6 +148,7 @@ resource "google_sql_database_instance" "webapp-sql-instance" {
   database_version    = "POSTGRES_15"
   deletion_protection = false
   depends_on          = [google_service_networking_connection.private_connection]
+  encryption_key_name = google_kms_crypto_key.webapp_sql_key.id
 
   settings {
     tier = "db-custom-1-3840"
@@ -286,6 +292,10 @@ resource "google_pubsub_topic_iam_binding" "publisher_access" {
 resource "google_storage_bucket" "csye-bucket-6225" {
   name     = "csye-bucket-6225-function"
   location = var.region
+  encryption {
+    default_kms_key_name = google_kms_crypto_key.bucket_key.id
+  }
+  depends_on = [google_kms_crypto_key_iam_binding.binding]
 }
 
 # # Upload the Cloud Function to the Bucket
@@ -347,6 +357,9 @@ resource "google_compute_region_instance_template" "default" {
     source_image = var.packer_image_name
     type         = "pd-balanced"
     disk_size_gb = 100
+    disk_encryption_key {
+      kms_key_self_link = google_kms_crypto_key.vm-instance-key.id
+    }
   }
 
   network_interface {
@@ -496,4 +509,55 @@ resource "google_dns_record_set" "a" {
 
   rrdatas    = [google_compute_global_forwarding_rule.default.ip_address]
   depends_on = [google_compute_global_forwarding_rule.default]
+}
+
+
+# Key Ring
+resource "google_kms_key_ring" "key-ring" {
+  name     = "webapp-keyring-${uuid()}"
+  location = "us-east4"
+}
+
+resource "google_kms_crypto_key" "vm-instance-key" {
+  name            = "vm-instance-key"
+  key_ring        = google_kms_key_ring.key-ring.id
+  rotation_period = "2592000s"
+}
+
+resource "google_kms_crypto_key" "webapp_sql_key" {
+  provider        = google-beta
+  name            = "webapp-sql-key"
+  key_ring        = google_kms_key_ring.key-ring.id
+  rotation_period = "2592000s"
+}
+
+resource "google_kms_crypto_key" "bucket_key" {
+  name            = "bucket_key"
+  key_ring        = google_kms_key_ring.key-ring.id
+  rotation_period = "2592000s"
+}
+data "google_storage_project_service_account" "gs_project_service_account" {
+}
+
+resource "google_kms_crypto_key_iam_binding" "binding" {
+  crypto_key_id = google_kms_crypto_key.bucket_key.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+
+  members = ["serviceAccount:${data.google_storage_project_service_account.gs_project_service_account.email_address}"]
+}
+
+resource "google_project_service_identity" "service_account_webapp_sql" {
+  provider = google-beta
+  project = var.project_id
+  service  = "sqladmin.googleapis.com"
+}
+
+resource "google_kms_crypto_key_iam_binding" "crypto_key" {
+  provider      = google-beta
+  crypto_key_id = google_kms_crypto_key.webapp_sql_key.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+
+  members = [
+    "serviceAccount:${google_project_service_identity.service_account_webapp_sql.email}",
+  ]
 }
